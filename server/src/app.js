@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import { env } from './config/env.js';
 import { storageMode } from './config/db.js';
 import authRouter from './routes/auth.js';
@@ -9,16 +11,26 @@ import mysteriesRouter from './routes/mysteries.js';
 
 const app = express();
 app.disable('x-powered-by');
+app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
 app.use(helmet());
 app.use(cors({ origin: env.clientOrigin.split(',').map((origin) => origin.trim()), credentials: true }));
 app.use(express.json({ limit: '32kb' }));
 app.use(rateLimit({ windowMs: env.rateLimitWindowMs, limit: env.rateLimitMax, standardHeaders: 'draft-7', legacyHeaders: false }));
 
-app.get('/api/health', (_req, res) => res.json({ success: true, status: 'operational', storage: storageMode() }));
+app.get('/api/health', (_req, res) => res.json({ success: true, status: 'operational', storage: storageMode(), aiConfigured: Boolean(env.geminiApiKey) }));
 app.use('/api/auth', authRouter);
 app.use('/api/v1/auth', authRouter);
 app.use('/api/mysteries', mysteriesRouter);
 app.use('/api/v1/investigations', mysteriesRouter);
+
+if (process.env.NODE_ENV === 'production') {
+  const clientDist = fileURLToPath(new URL('../../client/dist/', import.meta.url));
+  app.use(express.static(clientDist, { index: false, maxAge: '1h' }));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    return res.sendFile(path.join(clientDist, 'index.html'), (error) => error && next(error));
+  });
+}
 
 app.use((_req, res) => res.status(404).json({ success: false, error: 'Endpoint not found.' }));
 app.use((error, _req, res, _next) => {

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowDown, ArrowRight, ArrowUpRight, BadgeCheck, ChevronDown, CircleHelp, Fingerprint, KeyRound, LockKeyhole, Menu, Radio, Search, Shield, ShieldAlert, Sparkles, UserRound, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { authApi, mysteryApi } from '../services/api.js';
+import { authApi, mysteryApi, systemApi } from '../services/api.js';
 
 const presetSeeds = [
   { label: 'THE VAULT WENT SILENT', type: 'heist', scenario: 'A sealed museum vault is found open at dawn. Nothing appears missing, but the night guard insists the alarm never sounded.' },
@@ -23,6 +23,18 @@ export default function Home({ session, onAuth, onSignOut }) {
   const [authError, setAuthError] = useState('');
   const [recent, setRecent] = useState([]);
   const [legalPage, setLegalPage] = useState('');
+  const [health, setHealth] = useState(null);
+  const [apiStatus, setApiStatus] = useState('connecting');
+
+  useEffect(() => {
+    let active = true;
+    const checkHealth = () => systemApi.health()
+      .then((result) => { if (active) { setHealth(result); setApiStatus('online'); } })
+      .catch(() => { if (active) { setHealth(null); setApiStatus('offline'); } });
+    checkHealth();
+    const timer = window.setInterval(checkHealth, 30_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
 
   useEffect(() => {
     if (!session?.token) return;
@@ -79,7 +91,7 @@ export default function Home({ session, onAuth, onSignOut }) {
           <a href="#create-case">OPEN A CASE</a>
         </nav>
         <div className="topbar-right">
-          <span className="system-online"><i /> SYSTEM ONLINE</span>
+          <span className={`system-online api-status-${apiStatus}`} title={health ? `API online · storage: ${health.storage} · Gemini ${health.aiConfigured ? 'configured' : 'not configured'}` : apiStatus === 'offline' ? 'API is not reachable' : 'Checking API connection'}><i /> {apiStatus === 'online' ? 'SYSTEM ONLINE' : apiStatus === 'offline' ? 'API OFFLINE' : 'CONNECTING'}</span>
           {session?.user ? (
             <button className="user-menu" onClick={onSignOut} title="Sign out"><UserRound size={15} /> {session.user.username} <span>EXIT</span></button>
           ) : (

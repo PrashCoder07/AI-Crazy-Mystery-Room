@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+// Same-origin works in production; Vite proxies /api to Express during local development.
+const baseURL = import.meta.env.VITE_API_URL || '/api';
 const client = axios.create({ baseURL, timeout: 45_000, headers: { 'Content-Type': 'application/json' } });
 
 export async function request(path, { method = 'GET', data, token } = {}) {
@@ -8,7 +9,7 @@ export async function request(path, { method = 'GET', data, token } = {}) {
     const response = await client.request({ url: path, method, data, headers: token ? { Authorization: `Bearer ${token}` } : {} });
     return response.data;
   } catch (error) {
-    const message = error.response?.data?.error || (error.code === 'ECONNABORTED' ? 'The case engine took too long to respond.' : 'Could not reach the investigation server. Make sure the API is running.');
+    const message = error.response?.data?.error || (error.code === 'ECONNABORTED' ? 'The case engine took too long to respond.' : 'Could not reach the API. Open /api/health and make sure the server is running.');
     throw new Error(message);
   }
 }
@@ -16,6 +17,10 @@ export async function request(path, { method = 'GET', data, token } = {}) {
 export const authApi = {
   login: (data) => request('/auth/login', { method: 'POST', data }),
   register: (data) => request('/auth/register', { method: 'POST', data }),
+};
+
+export const systemApi = {
+  health: () => request('/health'),
 };
 
 export const mysteryApi = {
